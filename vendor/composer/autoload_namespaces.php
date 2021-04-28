@@ -7,5 +7,4 @@ $baseDir = dirname($vendorDir);
 
 return array(
     'tmhOAuth' => array($vendorDir . '/themattharris/tmhoauth'),
-    'Instagram' => array($vendorDir . '/php-instagram-api/php-instagram-api'),
 );

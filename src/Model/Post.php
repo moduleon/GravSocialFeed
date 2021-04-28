@@ -45,6 +45,11 @@ class Post
     /**
      * @var string
      */
+    private $tags;
+
+    /**
+     * @var string
+     */
     private $fileUrl;
 
     /**
@@ -203,6 +208,26 @@ class Post
     public function setBody($body)
     {
         $this->body = $body;
+
+        return $this;
+    }
+
+    /**
+     * @return string|null
+     */
+    public function getTags()
+    {
+        return $this->tags;
+    }
+
+    /**
+     * @param string|null $tags
+     *
+     * @return Post
+     */
+    public function setTags($tags)
+    {
+        $this->tags = $tags;
 
         return $this;
     }

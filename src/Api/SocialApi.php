@@ -41,7 +41,6 @@ abstract class SocialApi
      */
     public function getUserPostObjects($feed)
     {
-
         $socialPosts = $this->getUserPosts($feed);
         $postObjectList = [];
 
@@ -57,5 +56,21 @@ abstract class SocialApi
         }
 
         return $postObjectList;
+    }
+
+    public function errorMail($errorMessage)
+    {
+        $grav = Grav::instance();
+        $config = $grav['config']->get('plugins.social-feed');
+
+        if(isset($config['mail']) && !empty($config['mail'])) {
+            $content = "Problem on Social Feed Plugin: <br> ".get_current_user()."@".gethostname()." <br> " . __DIR__ . " <br> " . $errorMessage;
+            $subject = 'Social Feed Problem';
+
+            $message = $grav['Email']->message($subject, $content, 'text/html')
+                ->setFrom($config['mail'])
+                ->setTo($config['mail']);
+            $sent = $grav['Email']->send($message);
+        }
     }
 }

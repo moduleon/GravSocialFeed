@@ -2,6 +2,7 @@
 
 namespace Grav\Plugin\SocialFeed\Api;
 
+use Grav\Common\Grav;
 use Grav\Plugin\SocialFeed\Model\Post;
 use Facebook\Facebook;
 
@@ -13,21 +14,19 @@ final class FacebookApi extends SocialApi
     protected $providerName = 'facebook';
 
     /**
-     * @var string
+     * @var array
      */
-    protected $accessToken = '';
+    private $config;
 
     /**
-     * @param array $oAuthConfig
+     *  get ssl config
      */
-    public function __construct($oAuthConfig)
+    public function __construct()
     {
-        $this->api = new Facebook([
-            'app_id' => $oAuthConfig['app_id'],
-            'app_secret' => $oAuthConfig['app_secret'],
-            'default_graph_version' => 'v3.2',
-            'default_access_token' => $oAuthConfig['app_id'].'|'.$oAuthConfig['app_secret'],
-        ]);
+        $grav = Grav::instance();
+        $config = $grav['config']->get('plugins.social-feed');
+        $this->config['enablessl'] = $config['enablessl'];
+        $this->config['certpath'] = $config['certpath'];
     }
 
     /**
@@ -36,13 +35,14 @@ final class FacebookApi extends SocialApi
     public function getUserPosts($feed)
     {
         //save user accesstoken if is set
-        if(isset($feed['accesstoken']) && !empty($feed['accesstoken'])) {
-            $this->accessToken = $feed['accesstoken'];
+        if(isset($feed['username']) && !empty($feed['username'])) {
+            $this->config['username'] = $feed['username'];
+            $this->config['access_token'] = "&access_token=".$feed['accesstoken'];
         }
 
-        $parameters = '?fields=full_picture,from,message,id,permalink_url,created_time';
-        $response = $this->requestGet('/'.$feed['username'].'/posts' . $parameters);
-        return $response->getGraphEdge();
+        $fields = '?fields=full_picture,from,message,message_tags,id,permalink_url,created_time';
+        $response = $this->requestGet('https://graph.facebook.com/v8.0/'.$this->config['username'].'/posts' . $fields);
+        return $response['data'];
     }
 
     /**
@@ -54,38 +54,44 @@ final class FacebookApi extends SocialApi
         $post = new Post();
 
         //body
-        $message = $this->getFormattedTextFromPost($socialPost->getField('message'));
+        $message = $this->getFormattedTextFromPost($socialPost['message']);
         if (!isset($message)) {
             return false;
         }
         $post->setBody($message);
 
         //creator username and image
-        $from = $socialPost->getField('from');
-        $rawUserDetails = $this->requestGet('/' . $from['id'] . '?fields=username,picture');
-        $userDetails = $rawUserDetails->getGraphNode();
+        $fields = '?fields=username,picture';
+        $userDetails = $this->requestGet('https://graph.facebook.com/v8.0/'.$socialPost['from']['id'] . $fields);
 
         if (empty($userDetails)) {
             return false;
         }
 
-        $post->setAuthorName($from['name']);
-        $post->setAuthorUsername($userDetails->getField('username'));
-        $post->setAuthorFileUrl($userDetails->getField('picture')['url']);
+        $post->setAuthorName($socialPost['from']['name']);
+        $post->setAuthorUsername($userDetails['username']);
+        $post->setAuthorFileUrl($userDetails['picture']['data']['url']);
 
         //post image
-        $fullPicture = $socialPost->getField('full_picture');
-        if (isset($fullPicture) && !empty($fullPicture)) {
-            $file = $socialPost->getField('full_picture');
-            $post->setFileUrl($file);
-        }
+        $post->setFileUrl($socialPost['full_picture']);
 
         //other params
-        $post->setHeadline(strip_tags($socialPost->getField('message')));
-        $post->setPostId($socialPost->getField('id'));
+        $post->setHeadline(strip_tags($socialPost['message']));
+        $post->setPostId($socialPost['id']);
         $post->setProvider($this->providerName);
-        $post->setLink($socialPost->getField('permalink_url'));
-        $post->setPublishedAt($socialPost->getField('created_time'));
+        $post->setLink($socialPost['permalink_url']);
+
+        // Get Tags
+        $tags = [];
+        if($socialPost['message_tags']) {
+            foreach ($socialPost['message_tags'] as &$tag) {
+                $tags[] = $tag['name'];
+            }
+        }
+        $post->setTags(json_encode($tags));
+
+        $publishAt = new \DateTime($socialPost['created_time']);
+        $post->setPublishedAt($publishAt);
 
         return $post;
     }
@@ -114,23 +120,38 @@ final class FacebookApi extends SocialApi
      *
      * @param string $url
      *
-     * @return getGraphNode
+     * @return array
+     *
+     *
+     * @throws \Exception
      */
     private function requestGet($url)
     {
-        try {
-            // Returns a `FacebookFacebookResponse` object
-            $response = $this->api->get(
-                $url,
-                $this->accessToken
-            );
-        } catch(FacebookExceptionsFacebookResponseException $e) {
-            echo 'Graph returned an error: ' . $e->getMessage();
-            exit;
-        } catch(FacebookExceptionsFacebookSDKException $e) {
-            echo 'Facebook SDK returned an error: ' . $e->getMessage();
-            exit;
+        $arrContextOptions = array();
+
+        if($this->config['enablessl'] === false) {
+            $arrContextOptions['ssl']['verify_peer'] = false;
+            $arrContextOptions['ssl']['verify_peer_name'] = false;
         }
-        return $response;
+
+        if(isset($this->config['certpath']) && !empty($this->config['certpath'])) {
+            $arrContextOptions['ssl']['cafile'] = $this->config['certpath'];
+        }
+
+        try {
+            $response = file_get_contents($url . $this->config['access_token'], false, stream_context_create($arrContextOptions));
+        } catch (Exception $e) {
+            Grav::instance()['log']->error(sprintf($e->getMessage()));
+            throw new \Exception($e->getMessage());
+        }
+
+        if($response == false) {
+            $errorMessage = "Something went wrong by getting the data of ". $this->providerName . " user: " . $this->config['username'] . " (response == false) => May username or access token wrong/outdated";
+            $this->errorMail($errorMessage);
+            Grav::instance()['log']->error(sprintf($errorMessage));
+            throw new \Exception($errorMessage);
+        }
+
+        return json_decode($response, true);
     }
 }

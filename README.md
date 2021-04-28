@@ -80,6 +80,7 @@ You can even pass parameters to the `socialPosts()` function:
 | usernames | array   | empty         |
 | providers | array   | empty         |
 | duplicated| boolean | true          |
+| tags      | array   | empty         |
 
 For example:
 
@@ -93,6 +94,10 @@ For example:
     })
 %}
 ```
+
+#### Tags
+
+Tags for now only works for facebook posts. Using the Graph API Explorer from facebook u can check your tags in the message_tags field.
 
 ### Api entrypoint:
 
@@ -163,6 +168,21 @@ class CustomPlugin extends Plugin
     }
 }
 ```
+
+## Networks
+
+### Instagram
+To Fetch Posts form Instagram you need an user id (not the username) and an access token (preferably an long lived access token)
+There can be found many instructions on the internet. But most are outdated and not written for the new Instagram API.
+You need to create an app and keys on Facebook for Developers. This is a very good and actual manual:
+https://levelup.gitconnected.com/getting-started-with-the-instagram-basic-display-api-5124c92c4935
+
+### Facebook
+1. Create an Facebook App on https://developers.facebook.com/
+1. Create Access Token with manage_pages right with Graph API Explorer
+1. Generate Long Lived Access Token with Access Token Debugger
+1. Build Social Feed on your web page
+1. Go through app review for manage_pages
 
 ## Credits
 
